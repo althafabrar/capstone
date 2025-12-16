@@ -1,0 +1,7 @@
+.header-title {
+    font-size: 32px;
+    font-weight: bold;
+    color: #333;
+    padding: 10px 0;
+}
+.metric-card { background-color:#1f1f1f; padding:12px; border-radius:10px; color:white; }

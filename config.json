@@ -1,0 +1,10 @@
+{
+    "notif_enabled": true,
+    "notif_method": "Email",
+    "notif_priority": "Normal",
+    "schedule_on": false,
+    "schedule_type": "Harian",
+    "schedule_time": "00:00:00",
+    "fav_products": [],
+    "theme_choice": "Dark Grey (Default)"
+}
