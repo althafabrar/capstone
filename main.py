@@ -4,18 +4,19 @@ import plotly.express as px
 import pandas as pd  
 import os
 import uuid
+import datetime
 
 from logic.loader import load_data_sql
 from logic.filter import filter_df
 from logic.compute import summary_stats
 from logic.sorter import sort_bulan
 from logic import crud
-from logic.config_manager import save_config
+from logic.config import load_config, save_config
 
 
 # --- PAGE CONFIG ---
 st.set_page_config(
-    page_title="Dashboard Rekap 2024",
+    page_title="Dashboard Rekap",
     layout="wide",
 )
 
@@ -66,6 +67,9 @@ st.markdown("""
     border: 1px solid #2a2a2a;
     transition: all 0.25s ease;
     height: 100%;
+
+    display: flex;
+    flex-direction: column;
 }
 
 .katalog-card:hover {
@@ -73,12 +77,25 @@ st.markdown("""
     box-shadow: 0 12px 30px rgba(0,0,0,0.45);
 }
 
-.katalog-image {
+/* WRAPPER GAMBAR */
+.katalog-image-wrapper {
     width: 100%;
-    height: 180px;
-    object-fit: cover;
+    height: 200px;
+    overflow: hidden;
     border-radius: 14px;
     margin-bottom: 12px;
+}
+
+/* GAMBAR */
+.katalog-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* BODY CARD */
+.katalog-body {
+    flex-grow: 1;
 }
 
 .katalog-title {
@@ -98,16 +115,42 @@ st.markdown("""
     font-size: 13px;
     color: #d0d0d0;
     margin-top: 6px;
-    max-height: 38px;
+    max-height: 40px;
     overflow: hidden;
-    text-overflow: ellipsis;
 }
 
+/* BUTTON AREA */
 .katalog-btn {
-    margin-top: 12px;
+    margin-top: 14px;
 }
+
+/* Bikin gambar katalog seragam */
+[data-testid="stImage"] img {
+    height: 300px;
+    object-fit: cover;
+    border-radius: 14px;
+}
+
+
 </style>
 """, unsafe_allow_html=True)
+
+config = load_config()
+
+for key, val in config.items():
+    if key not in st.session_state:
+        # CASE 1: schedule_time disimpan sebagai string "HH:MM"
+        if key == "schedule_time" and isinstance(val, str):
+            try:
+                h, m = map(int, val.split(":"))
+                st.session_state.schedule_time = datetime.time(h, m)
+            except Exception:
+                st.session_state.schedule_time = datetime.time(8, 0)
+
+        # CASE 2: nilai lain (bool, str, list)
+        else:
+            st.session_state[key] = val
+
 
 # --- Top menu ---
 from streamlit_option_menu import option_menu
@@ -121,6 +164,19 @@ selected = option_menu(
 # --- Load Data ---
 df = load_data_sql()
 df = sort_bulan(df)
+
+if st.session_state.notif_enabled:
+    st.info(f"🔔 Notifikasi aktif ({st.session_state.notif_method})")
+
+if st.session_state.schedule_on:
+    st.success(
+        f"⏱️ Laporan dijadwalkan {st.session_state.schedule_type} "
+        f"pukul {st.session_state.schedule_time}"
+    )
+
+if st.session_state.theme_choice == "Light Mode":
+    st.markdown("<style>.stApp{background:#fafafa;color:#000}</style>", unsafe_allow_html=True)
+
 
 if selected == "Dashboard":
     st.title("📊 Dashboard Rekap")
@@ -213,8 +269,17 @@ if selected == "Dashboard":
         st.plotly_chart(fig3, use_container_width=True)
     
     with col4:
-        st.markdown("<div class='metric-card'><p class='section-title'>📄 Data Tersaring</p></div>", unsafe_allow_html=True)
-        st.dataframe(df_filtered, use_container_width=True)
+        st.markdown("""
+        <div class='metric-card'>
+            <p class='section-title'>📄 Data Tersaring</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if df_filtered.empty:
+            st.warning("Data tidak ditemukan sesuai filter yang dipilih")
+        else:
+            st.dataframe(df_filtered, use_container_width=True)
+
     
 elif selected == "Data Pesanan":
     st.title("📦 Kelola Data Pesanan")
@@ -442,6 +507,7 @@ elif selected == "Katalog":
     st.markdown("---")
 
     # ---------- GRID PRODUK ----------
+   # ---------- GRID PRODUK ----------
     if df_katalog.empty:
         st.info("Belum ada produk")
     else:
@@ -451,7 +517,7 @@ elif selected == "Katalog":
             with cols[i % 3]:
                 st.markdown("<div class='katalog-card'>", unsafe_allow_html=True)
 
-                # IMAGE
+                # IMAGE (AMAN UNTUK STREAMLIT)
                 if row["gambar"] and os.path.exists(row["gambar"]):
                     st.image(row["gambar"], use_container_width=True)
                 else:
@@ -460,13 +526,12 @@ elif selected == "Katalog":
                         use_container_width=True
                     )
 
-                # TITLE
+                # BODY
                 st.markdown(
                     f"<div class='katalog-title'>{row['nama_barang']}</div>",
                     unsafe_allow_html=True
                 )
 
-                # META INFO
                 st.markdown(
                     f"""
                     <div class='katalog-info'>
@@ -477,7 +542,6 @@ elif selected == "Katalog":
                     unsafe_allow_html=True
                 )
 
-                # DESCRIPTION
                 st.markdown(
                     f"<div class='katalog-desc'>{row['keterangan']}</div>",
                     unsafe_allow_html=True
@@ -541,15 +605,16 @@ elif selected == "Katalog":
                 st.rerun()
 
 
-# PENGATURAN
 # ===============================
 # PENGATURAN
 # ===============================
 elif selected == "Pengaturan":
+    from datetime import time
+
     st.title("⚙️ Pengaturan Sistem")
 
     # ===============================
-    # INIT SESSION STATE
+    # INIT SESSION STATE (AMAN)
     # ===============================
     defaults = {
         "notif_enabled": True,
@@ -557,13 +622,13 @@ elif selected == "Pengaturan":
         "notif_priority": "Normal",
         "schedule_on": False,
         "schedule_type": "Harian",
-        "schedule_time": None,
+        "schedule_time": time(8, 0),   # ⬅️ FIX UTAMA (tidak boleh None)
         "fav_products": [],
         "theme_choice": "Dark Grey (Default)"
     }
 
     for key, val in defaults.items():
-        if key not in st.session_state:
+        if key not in st.session_state or st.session_state[key] is None:
             st.session_state[key] = val
 
     # ===============================
@@ -576,6 +641,7 @@ elif selected == "Pengaturan":
             padding: 25px;
             border-radius: 14px;
             border: 1px solid #2a2a2a;
+            margin-bottom: 20px;
         }
         .erp-title {
             font-size: 22px;
@@ -610,7 +676,8 @@ elif selected == "Pengaturan":
         st.session_state.notif_method = st.selectbox(
             "Metode Notifikasi",
             ["Email", "Popup Dashboard", "Keduanya"],
-            index=["Email", "Popup Dashboard", "Keduanya"].index(st.session_state.notif_method)
+            index=["Email", "Popup Dashboard", "Keduanya"]
+            .index(st.session_state.notif_method)
         )
 
         st.session_state.notif_priority = st.select_slider(
@@ -638,9 +705,11 @@ elif selected == "Pengaturan":
         st.session_state.schedule_type = st.radio(
             "Frekuensi",
             ["Harian", "Mingguan", "Bulanan"],
-            index=["Harian", "Mingguan", "Bulanan"].index(st.session_state.schedule_type)
+            index=["Harian", "Mingguan", "Bulanan"]
+            .index(st.session_state.schedule_type)
         )
 
+        # ⬅️ FIX TIME INPUT (TIDAK ERROR)
         st.session_state.schedule_time = st.time_input(
             "Waktu Pengingat",
             value=st.session_state.schedule_time
@@ -670,44 +739,7 @@ elif selected == "Pengaturan":
         st.markdown("</div>", unsafe_allow_html=True)
 
     # ===============================
-    # THEME
-    # ===============================
-    with colD:
-        st.markdown("<div class='erp-card'>", unsafe_allow_html=True)
-
-        st.markdown("<div class='erp-title'>🎨 Tema Tampilan</div>", unsafe_allow_html=True)
-
-        st.session_state.theme_choice = st.radio(
-            "Mode Warna",
-            ["Dark Grey (Default)", "Midnight Blue", "Deep Purple", "Light Mode"],
-            index=["Dark Grey (Default)", "Midnight Blue", "Deep Purple", "Light Mode"]
-            .index(st.session_state.theme_choice)
-        )
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    # ===============================
-    # BACKUP
-    # ===============================
-    st.markdown("<div class='erp-card'>", unsafe_allow_html=True)
-
-    st.markdown("<div class='erp-title'>💾 Backup & Restore</div>", unsafe_allow_html=True)
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        if st.button("📤 Buat Backup Baru", use_container_width=True):
-            st.success("Backup berhasil dibuat (simulasi).")
-
-    with col2:
-        uploaded = st.file_uploader("Upload Backup", type=["sql", "zip"])
-        if uploaded:
-            st.success("Restore berhasil (simulasi).")
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # ===============================
-    # SAVE BUTTON
+    # SAVE BUTTON (REAL & AMAN)
     # ===============================
     if st.button("💾 Simpan Semua Pengaturan", use_container_width=True):
         save_config({
@@ -716,7 +748,7 @@ elif selected == "Pengaturan":
             "notif_priority": st.session_state.notif_priority,
             "schedule_on": st.session_state.schedule_on,
             "schedule_type": st.session_state.schedule_type,
-            "schedule_time": str(st.session_state.schedule_time),
+            "schedule_time": st.session_state.schedule_time.strftime("%H:%M"),
             "fav_products": st.session_state.fav_products,
             "theme_choice": st.session_state.theme_choice
         })

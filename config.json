@@ -2,9 +2,11 @@
     "notif_enabled": true,
     "notif_method": "Email",
     "notif_priority": "Normal",
-    "schedule_on": false,
-    "schedule_type": "Harian",
-    "schedule_time": "00:00:00",
-    "fav_products": [],
-    "theme_choice": "Dark Grey (Default)"
+    "schedule_on": true,
+    "schedule_type": "Bulanan",
+    "schedule_time": "08:45",
+    "fav_products": [
+        "B. Kotak RSI Jombang"
+    ],
+    "theme_choice": "Midnight Blue"
 }
